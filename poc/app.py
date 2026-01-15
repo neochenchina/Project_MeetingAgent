@@ -34,7 +34,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>語音摘要助手</title>
+    <title>世德會議助理</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -159,6 +159,34 @@ HTML_TEMPLATE = """
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .progress-text { margin-top: 10px; font-size: 14px; }
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-bar.indeterminate {
+            width: 30%;
+            animation: indeterminate 1.5s infinite ease-in-out;
+        }
+        @keyframes indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+        .timestamp {
+            color: #667eea;
+            font-weight: 600;
+            font-family: monospace;
+        }
 
         @media (max-width: 600px) {
             .header { padding: 20px; }
@@ -172,8 +200,8 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>語音摘要助手</h1>
-            <p>上傳中英文音檔，自動轉錄並生成結構化摘要</p>
+            <h1>世德會議助理</h1>
+            <p>上傳會議音檔，自動轉錄並生成結構化摘要</p>
         </div>
 
         <div class="content">
@@ -206,6 +234,9 @@ HTML_TEMPLATE = """
                 <span class="loader"></span>
                 <span id="statusText">處理中...</span>
                 <div class="progress-text" id="progressText"></div>
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
             </div>
 
             <div class="result-section" id="transcriptSection">
@@ -233,6 +264,8 @@ HTML_TEMPLATE = """
         const summarySection = document.getElementById('summarySection');
         const transcriptResult = document.getElementById('transcriptResult');
         const summaryResult = document.getElementById('summaryResult');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
 
         // 點擊上傳區域
         dropZone.addEventListener('click', () => fileInput.click());
@@ -282,6 +315,11 @@ HTML_TEMPLATE = """
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="loader"></span>處理中...';
 
+            // 顯示進度條
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.classList.add('indeterminate');
+
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             formData.append('style', document.getElementById('styleSelect').value);
@@ -310,20 +348,32 @@ HTML_TEMPLATE = """
                 const result = await response.json();
 
                 if (result.success) {
+                    // 完成進度條動畫
+                    progressBar.classList.remove('indeterminate');
+                    progressBar.style.width = '100%';
+
                     status.className = 'status show success';
                     statusText.textContent = '處理完成！';
                     progressText.textContent = `語言: ${result.language || '自動偵測'}`;
 
-                    transcriptResult.textContent = result.transcript;
+                    // 顯示帶時間軸的逐字稿
+                    transcriptResult.innerHTML = formatTranscript(result.transcript_with_timestamps || result.transcript);
                     transcriptSection.classList.add('show');
 
                     summaryResult.innerHTML = formatSummary(result.summary);
                     summarySection.classList.add('show');
+
+                    // 隱藏進度條
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                    }, 500);
                 } else {
                     throw new Error(result.error || '處理失敗');
                 }
             } catch (error) {
                 if (typeof timer !== 'undefined') clearInterval(timer);
+                progressBar.classList.remove('indeterminate');
+                progressContainer.style.display = 'none';
                 status.className = 'status show error';
                 statusText.textContent = '處理失敗';
                 progressText.textContent = error.message;
@@ -332,6 +382,21 @@ HTML_TEMPLATE = """
                 submitBtn.textContent = '開始處理';
             }
         });
+
+        function formatTranscript(text) {
+            // 格式化帶時間軸的逐字稿
+            return text
+                .split('\\n')
+                .map(line => {
+                    // 匹配時間戳格式 [00:00 - 00:00]
+                    const match = line.match(/^\\[(\\d{2}:\\d{2})\\s*-\\s*(\\d{2}:\\d{2})\\]\\s*(.*)$/);
+                    if (match) {
+                        return `<div style="margin-bottom: 8px;"><span class="timestamp">[${match[1]} - ${match[2]}]</span> ${match[3]}</div>`;
+                    }
+                    return line ? `<div style="margin-bottom: 8px;">${line}</div>` : '';
+                })
+                .join('');
+        }
 
         function formatSummary(text) {
             // 簡單的 Markdown 轉 HTML
@@ -407,6 +472,7 @@ async def process_audio(
         return JSONResponse({
             "success": True,
             "transcript": transcript,
+            "transcript_with_timestamps": result.get("timestamped_text", ""),
             "summary": summary,
             "language": language
         })

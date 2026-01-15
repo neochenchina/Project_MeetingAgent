@@ -15,7 +15,7 @@ def transcribe(audio_path: str, language: str = None) -> dict:
         language: 語言代碼，None 表示自動偵測
 
     Returns:
-        dict: 包含 text (完整文字) 和 segments (分段資訊)
+        dict: 包含 text (完整文字)、segments (分段資訊) 和 timestamped_text (帶時間軸文字)
     """
     # 使用 MLX 優化的 Whisper large-v3 模型
     result = mlx_whisper.transcribe(
@@ -25,10 +25,25 @@ def transcribe(audio_path: str, language: str = None) -> dict:
         verbose=False
     )
 
+    # 產生帶時間軸的文字
+    segments = result.get("segments", [])
+    timestamped_lines = []
+    for segment in segments:
+        start = segment.get("start", 0)
+        end = segment.get("end", 0)
+        text = segment.get("text", "").strip()
+
+        # 格式化時間戳
+        start_str = f"{int(start // 60):02d}:{int(start % 60):02d}"
+        end_str = f"{int(end // 60):02d}:{int(end % 60):02d}"
+
+        timestamped_lines.append(f"[{start_str} - {end_str}] {text}")
+
     return {
         "text": result["text"],
         "language": result.get("language", "unknown"),
-        "segments": result.get("segments", [])
+        "segments": segments,
+        "timestamped_text": "\n".join(timestamped_lines)
     }
 
 
