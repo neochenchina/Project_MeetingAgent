@@ -1,0 +1,4 @@
+# POC 依賴
+mlx-whisper>=0.4.0
+gradio>=4.0.0
+requests>=2.31.0
