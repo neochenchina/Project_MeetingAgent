@@ -12,9 +12,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 from stt import transcribe
 from summarizer import summarize, check_ollama_status
+
+# 建立執行緒池處理 CPU 密集型任務
+executor = ThreadPoolExecutor(max_workers=2)
 
 app = FastAPI(title="語音摘要助手")
 
@@ -282,14 +287,25 @@ HTML_TEMPLATE = """
             formData.append('style', document.getElementById('styleSelect').value);
 
             try {
-                // 更新狀態
+                // 更新狀態與計時器
                 statusText.textContent = '正在進行語音轉文字...';
-                progressText.textContent = '首次執行需下載模型，請稍候';
+                progressText.textContent = '處理中，請耐心等待 (大檔案可能需要 3-5 分鐘)';
+
+                // 顯示經過時間
+                let seconds = 0;
+                const timer = setInterval(() => {
+                    seconds++;
+                    const mins = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    progressText.textContent = `處理中... 已經過 ${mins}:${secs.toString().padStart(2, '0')}`;
+                }, 1000);
 
                 const response = await fetch('/process', {
                     method: 'POST',
                     body: formData
                 });
+
+                clearInterval(timer);
 
                 const result = await response.json();
 
@@ -307,6 +323,7 @@ HTML_TEMPLATE = """
                     throw new Error(result.error || '處理失敗');
                 }
             } catch (error) {
+                if (typeof timer !== 'undefined') clearInterval(timer);
                 status.className = 'status show error';
                 statusText.textContent = '處理失敗';
                 progressText.textContent = error.message;
@@ -371,8 +388,9 @@ async def process_audio(
         with open(file_path, "wb") as f:
             f.write(content)
 
-        # 語音轉文字
-        result = transcribe(str(file_path))
+        # 語音轉文字 (使用執行緒池避免阻塞)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(executor, transcribe, str(file_path))
         transcript = result["text"]
         language = result.get("language", "unknown")
 
@@ -382,8 +400,9 @@ async def process_audio(
                 "error": "轉錄結果為空，請確認音檔內容"
             })
 
-        # 生成摘要
-        summary = summarize(transcript, style=style)
+        # 生成摘要 (使用執行緒池避免阻塞)
+        summarize_fn = partial(summarize, transcript, style=style)
+        summary = await loop.run_in_executor(executor, summarize_fn)
 
         return JSONResponse({
             "success": True,
