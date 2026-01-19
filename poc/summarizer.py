@@ -8,8 +8,8 @@ import json
 from typing import Optional
 
 
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
-DEFAULT_MODEL = "qwen2.5:14b"  # 可以改成 qwen2.5:32b 以獲得更好效果
+OLLAMA_API_URL = "http://192.168.1.213:11434/api/generate"
+DEFAULT_MODEL = "qwen3:32b-q4_K_M"
 
 
 def summarize(
@@ -107,7 +107,7 @@ def check_ollama_status() -> dict:
         dict: 包含 available (bool) 和 models (list)
     """
     try:
-        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        response = requests.get("http://192.168.1.213:11434/api/tags", timeout=5)
         if response.status_code == 200:
             data = response.json()
             models = [m.get("name", "") for m in data.get("models", [])]

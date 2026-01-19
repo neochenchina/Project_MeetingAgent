@@ -26,8 +26,8 @@
 # 下載並安裝 Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# 下載 qwen2.5:14b 模型（約 9GB）
-ollama pull qwen2.5:14b
+# 下載 qwen3:32b-q4_K_M 模型
+ollama pull qwen3:32b-q4_K_M
 ```
 
 ### 2. 設定 Python 環境
@@ -82,7 +82,7 @@ python app.py
                     +------------------+                                   +------------------+
                               |                                                       |
                     +------------------+                                   +------------------+
-                    |  whisper-large-v3|                                   |   qwen2.5:14b    |
+                    |  whisper-large-v3|                                   | qwen3:32b-q4_K_M |
                     |   (MLX 優化)      |                                   |   (本地 LLM)      |
                     +------------------+                                   +------------------+
 ```
